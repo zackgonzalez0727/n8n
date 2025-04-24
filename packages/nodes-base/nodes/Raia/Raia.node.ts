@@ -184,7 +184,13 @@ export class Raia implements INodeType {
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
 		const body = this.getBodyData();
-		const { conversationId, messageId, userId, message, timestamp } = body;
+
+		// Safely destructure with default values or optional chaining
+		const conversationId = body?.conversationId ?? null;
+		const messageId = body?.messageId ?? null;
+		const userId = body?.userId ?? null;
+		const message = body?.message ?? null;
+		const timestamp = body?.timestamp ?? null;
 
 		return {
 			workflowData: [
@@ -206,7 +212,11 @@ export class Raia implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const action = this.getNodeParameter('action', 0) as string;
-		const credentials = (await this.getCredentials('raiaApi')) as { apiKey: string };
+		const credentials = (await this.getCredentials('raiaApi')) as {
+			apiKey: string;
+			baseUrl: string;
+		};
+		const baseUrl = credentials.baseUrl.replace(/\/+$/, ''); // Trim trailing slashes
 
 		const headers = {
 			Accept: 'application/json',
@@ -243,7 +253,7 @@ export class Raia implements INodeType {
 
 				const response = await this.helpers.httpRequest({
 					method: 'POST',
-					url: 'https://api.raia2.com/external/conversations/start',
+					url: `${baseUrl}/conversations/start`,
 					headers,
 					body,
 					json: true,
@@ -252,7 +262,7 @@ export class Raia implements INodeType {
 			} else if (action === 'chatWithAgent') {
 				const userResponse = await this.helpers.httpRequest({
 					method: 'POST',
-					url: 'https://api.raia2.com/external/users',
+					url: `${baseUrl}/users`,
 					headers,
 					body: {
 						firstName: this.getNodeParameter('firstName', 0),
@@ -268,7 +278,7 @@ export class Raia implements INodeType {
 				});
 				const conversationResponse = await this.helpers.httpRequest({
 					method: 'POST',
-					url: 'https://api.raia2.com/external/conversations',
+					url: `${baseUrl}/conversations`,
 					headers,
 					body: { conversationUserId: userResponse.id, title: 'Chat with Agent' },
 					json: true,
@@ -278,7 +288,7 @@ export class Raia implements INodeType {
 				const prompt = this.getNodeParameter('prompt', 0) as string;
 				const response = await this.helpers.httpRequest({
 					method: 'POST',
-					url: 'https://api.raia2.com/external/prompts',
+					url: `${baseUrl}/prompts`,
 					headers,
 					body: { prompt },
 					json: true,

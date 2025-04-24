@@ -8,7 +8,7 @@ import type {
 export class RaiaApi implements ICredentialType {
 	name = 'raiaApi';
 
-	displayName = 'Raia API';
+	displayName = 'raia API';
 
 	documentationUrl = 'https://api.raia2.com/api/external/docs';
 
@@ -24,6 +24,13 @@ export class RaiaApi implements ICredentialType {
 			},
 			default: '',
 		},
+		{
+			displayName: 'API Base URL',
+			name: 'baseUrl',
+			type: 'string',
+			default: 'https://api.raia2.com/external',
+			placeholder: 'https://api.raia2.com/external',
+		},
 	];
 
 	authenticate: IAuthenticateGeneric = {
@@ -37,11 +44,8 @@ export class RaiaApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			method: 'POST',
+			method: 'GET',
 			url: 'https://api.raia2.com/external/agents/by-api-key',
-			body: {
-				prompt: 'Test prompt to validate API key',
-			},
 			json: true,
 		},
 	};
