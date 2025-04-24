@@ -1,13 +1,12 @@
-import type {
-	ITriggerFunctions,
-	ITriggerResponse,
+import {
+	IExecuteFunctions,
+	IWebhookFunctions,
+	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	IHttpRequestMethods,
-	IExecuteFunctions,
-	INodeExecutionData,
+	IWebhookResponseData,
 } from 'n8n-workflow';
-import { ApplicationError, NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 
 export class Raia implements INodeType {
 	description: INodeTypeDescription = {
@@ -16,40 +15,51 @@ export class Raia implements INodeType {
 		group: ['trigger'],
 		version: 1,
 		icon: 'file:raia.svg',
-		description: 'raia Chat Agency API',
+		description: 'Interact with Raia API',
 		defaults: {
 			name: 'raia',
 		},
-		inputs: [NodeConnectionTypes.Main],
-		outputs: [NodeConnectionTypes.Main],
+		inputs: ['main'],
+		outputs: ['main'],
 		credentials: [
 			{
 				name: 'raiaApi',
 				required: true,
 			},
 		],
+		webhooks: [
+			{
+				name: 'default',
+				httpMethod: 'POST',
+				responseMode: 'onReceived',
+				path: 'raia-webhook',
+			},
+		],
 		properties: [
 			{
-				displayName: 'Conversation Type',
-				name: 'conversationType',
+				displayName: 'Action',
+				name: 'action',
 				type: 'options',
 				options: [
-					{ name: 'raia Managed', value: 'raiaManaged' },
-					{ name: 'Customer Managed', value: 'customerManaged' },
-					{ name: 'One-Off AI Message', value: 'oneOffMessage' },
+					{ name: 'Start SMS Conversation', value: 'startSms' },
+					{ name: 'Start Email Conversation', value: 'startEmail' },
+					{ name: 'Start Voice Conversation', value: 'startVoice' },
+					{ name: 'Chat with Agent', value: 'chatWithAgent' },
+					{ name: 'Prompt an Agent', value: 'promptAgent' },
+					{ name: 'Wait for Reply (Webhook)', value: 'waitForReply' },
+					{ name: 'Send Message', value: 'sendMessage' },
 				],
-				default: 'raiaManaged',
-				description: 'Choose which type of conversation to start',
+				default: 'startSms',
 			},
+
+			// Common fields
 			{
 				displayName: 'First Name',
 				name: 'firstName',
 				type: 'string',
 				default: '',
 				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
 				},
 			},
 			{
@@ -58,150 +68,144 @@ export class Raia implements INodeType {
 				type: 'string',
 				default: '',
 				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
 				},
 			},
 			{
 				displayName: 'Context',
 				name: 'context',
 				type: 'string',
-				default: '',
+				default: 'Support',
 				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
 				},
 			},
 			{
 				displayName: 'Source',
 				name: 'source',
 				type: 'string',
-				default: 'webchat',
+				default: 'crm',
 				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
 				},
 			},
+			{
+				displayName: 'fkId',
+				name: 'fkId',
+				type: 'string',
+				default: '',
+				displayOptions: {
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
+				},
+			},
+			{
+				displayName: 'fkUserId',
+				name: 'fkUserId',
+				type: 'string',
+				default: '',
+				displayOptions: {
+					show: { action: ['startSms', 'startEmail', 'startVoice', 'chatWithAgent'] },
+				},
+			},
+
+			// Specific fields
 			{
 				displayName: 'Phone Number',
 				name: 'phoneNumber',
 				type: 'string',
 				default: '',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
-				},
+				displayOptions: { show: { action: ['startSms', 'startVoice'] } },
+			},
+			{
+				displayName: 'SMS Introduction',
+				name: 'smsIntroduction',
+				type: 'string',
+				default: '',
+				displayOptions: { show: { action: ['startSms'] } },
+			},
+			{
+				displayName: 'Voice Introduction',
+				name: 'voiceIntroduction',
+				type: 'string',
+				default: '',
+				displayOptions: { show: { action: ['startVoice'] } },
 			},
 			{
 				displayName: 'Email',
 				name: 'email',
 				type: 'string',
-				placeholder: 'name@email.com',
 				default: '',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
-				},
-			},
-			{
-				displayName: 'Channel',
-				name: 'channel',
-				type: 'options',
-				options: [
-					{ name: 'SMS', value: 'sms' },
-					{ name: 'Email', value: 'email' },
-					{ name: 'Voice', value: 'voice' },
-				],
-				default: 'email',
-				description: 'The communication channel to use',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
-				},
+				displayOptions: { show: { action: ['startEmail'] } },
 			},
 			{
 				displayName: 'Email Subject',
 				name: 'emailSubject',
 				type: 'string',
-				default: 'New Conversation',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-						channel: ['email'],
-					},
-				},
+				default: '',
+				displayOptions: { show: { action: ['startEmail'] } },
 			},
 			{
 				displayName: 'Email Introduction',
 				name: 'emailIntroduction',
 				type: 'string',
-				default: 'New Conversation',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-						channel: ['email'],
-					},
-				},
+				default: '',
+				displayOptions: { show: { action: ['startEmail'] } },
 			},
 			{
-				displayName: 'Include Signature in Email',
+				displayName: 'Include Signature In Email',
 				name: 'includeSignatureInEmail',
 				type: 'boolean',
 				default: false,
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-						channel: ['email'],
-					},
-				},
-			},
-			{
-				displayName: 'User Message',
-				name: 'userMessage',
-				type: 'string',
-				default: '',
-				description: 'Message to send to the AI Agent',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
-				},
-			},
-			{
-				displayName: 'Continue Conversation',
-				name: 'continueConversation',
-				type: 'boolean',
-				default: false,
-				description: 'Whether to continue the conversation after receiving a reply',
-				displayOptions: {
-					show: {
-						conversationType: ['raiaManaged', 'customerManaged'],
-					},
-				},
+				displayOptions: { show: { action: ['startEmail'] } },
 			},
 			{
 				displayName: 'Prompt',
 				name: 'prompt',
 				type: 'string',
 				default: '',
-				displayOptions: {
-					show: {
-						conversationType: ['oneOffMessage'],
-					},
-				},
+				displayOptions: { show: { action: ['promptAgent'] } },
+			},
+			{
+				displayName: 'Conversation ID',
+				name: 'conversationId',
+				type: 'string',
+				default: '',
+				displayOptions: { show: { action: ['sendMessage'] } },
+			},
+			{
+				displayName: 'Message',
+				name: 'message',
+				type: 'string',
+				default: '',
+				displayOptions: { show: { action: ['sendMessage'] } },
 			},
 		],
 	};
 
+	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
+		const body = this.getBodyData();
+		const { conversationId, messageId, userId, message, timestamp } = body;
+
+		return {
+			workflowData: [
+				[
+					{
+						json: {
+							conversationId,
+							messageId,
+							userId,
+							message,
+							timestamp,
+							fullPayload: body,
+						},
+					},
+				],
+			],
+		};
+	}
+
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		const returnItems = [];
-		const conversationType = this.getNodeParameter('conversationType', 0) as string;
+		const action = this.getNodeParameter('action', 0) as string;
 		const credentials = (await this.getCredentials('raiaApi')) as { apiKey: string };
 
 		const headers = {
@@ -210,122 +214,98 @@ export class Raia implements INodeType {
 			'Agent-Secret-Key': credentials.apiKey,
 		};
 
+		const returnItems: INodeExecutionData[] = [];
+
 		try {
-			if (conversationType === 'raiaManaged' || conversationType === 'customerManaged') {
-				let conversationId: string;
+			if (action === 'startSms' || action === 'startEmail' || action === 'startVoice') {
+				const body: any = {
+					firstName: this.getNodeParameter('firstName', 0),
+					lastName: this.getNodeParameter('lastName', 0),
+					context: this.getNodeParameter('context', 0),
+					source: this.getNodeParameter('source', 0),
+					fkId: this.getNodeParameter('fkId', 0),
+					fkUserId: this.getNodeParameter('fkUserId', 0),
+					channel: action === 'startSms' ? 'sms' : action === 'startEmail' ? 'email' : 'voice',
+				};
 
-				if (conversationType === 'raiaManaged') {
-					const response = await this.helpers.httpRequest({
-						method: 'POST',
-						url: 'https://api.raia2.com/external/conversations/start',
-						headers,
-						body: {
-							firstName: this.getNodeParameter('firstName', 0),
-							lastName: this.getNodeParameter('lastName', 0),
-							context: this.getNodeParameter('context', 0),
-							source: this.getNodeParameter('source', 0),
-							channel: this.getNodeParameter('channel', 0),
-							phoneNumber: this.getNodeParameter('phoneNumber', 0),
-							email: this.getNodeParameter('email', 0),
-							emailSubject: this.getNodeParameter('emailSubject', 0),
-							emailIntroduction: this.getNodeParameter('emailIntroduction', 0),
-							includeSignatureInEmail: this.getNodeParameter('includeSignatureInEmail', 0),
-						},
-						json: true,
-					});
-					conversationId = response.conversationId;
-				} else {
-					const userResponse = await this.helpers.httpRequest({
-						method: 'POST',
-						url: 'https://api.raia2.com/external/users',
-						headers,
-						body: {
-							firstName: this.getNodeParameter('firstName', 0),
-							lastName: this.getNodeParameter('lastName', 0),
-							phoneNumber: this.getNodeParameter('phoneNumber', 0),
-							email: this.getNodeParameter('email', 0),
-						},
-						json: true,
-					});
-					const conversationUserId = userResponse.id;
-
-					const conversationResponse = await this.helpers.httpRequest({
-						method: 'POST',
-						url: 'https://api.raia2.com/external/conversations',
-						headers,
-						body: {
-							conversationUserId,
-							title: 'New Conversation Title',
-						},
-						json: true,
-					});
-					conversationId = conversationResponse.id;
+				if (action === 'startSms') {
+					body.phoneNumber = this.getNodeParameter('phoneNumber', 0);
+					body.smsIntroduction = this.getNodeParameter('smsIntroduction', 0);
+				} else if (action === 'startEmail') {
+					body.email = this.getNodeParameter('email', 0);
+					body.emailSubject = this.getNodeParameter('emailSubject', 0);
+					body.emailIntroduction = this.getNodeParameter('emailIntroduction', 0);
+					body.includeSignatureInEmail = this.getNodeParameter('includeSignatureInEmail', 0);
+				} else if (action === 'startVoice') {
+					body.phoneNumber = this.getNodeParameter('phoneNumber', 0);
+					body.voiceIntroduction = this.getNodeParameter('voiceIntroduction', 0);
 				}
 
-				let continueConversation = true; // Flag to control the loop
-
-				while (continueConversation) {
-					const userMessage = this.getNodeParameter('userMessage', 0);
-					console.log(`Sending message: ${userMessage}`);
-
-					// Send the user's message to the conversation
-					const messageResponse = await this.helpers.httpRequest({
-						method: 'POST',
-						url: `https://api.raia2.com/external/conversations/${conversationId}/messages`,
-						headers,
-						body: {
-							message: userMessage,
-						},
-						json: true,
-					});
-
-					console.log(`Agent Reply: ${messageResponse.message}`);
-
-					// Return the conversationId, userMessage, and agentReply
-					returnItems.push({
-						json: {
-							conversationId,
-							userMessage,
-							agentReply: messageResponse.message,
-						},
-					});
-
-					// Check if the user wants to continue the conversation
-					continueConversation = !!this.getNodeParameter('continueConversation', 0, false);
-					if (!continueConversation) {
-						console.log('Ending conversation as per user request.');
-						break;
-					}
-
-					// Optional: Add a delay between messages to avoid overwhelming the API
-					await new Promise((resolve) => setTimeout(resolve, 1000)); // 1-second delay
-				}
-
-				return [returnItems];
-			} else if (conversationType === 'oneOffMessage') {
-				const responseData = await this.helpers.httpRequest({
+				const response = await this.helpers.httpRequest({
 					method: 'POST',
-					url: 'https://api.raia2.com/external/prompts',
+					url: 'https://api.raia2.com/external/conversations/start',
+					headers,
+					body,
+					json: true,
+				});
+				returnItems.push({ json: response });
+			} else if (action === 'chatWithAgent') {
+				const userResponse = await this.helpers.httpRequest({
+					method: 'POST',
+					url: 'https://api.raia2.com/external/users',
 					headers,
 					body: {
-						prompt: this.getNodeParameter('prompt', 0),
+						firstName: this.getNodeParameter('firstName', 0),
+						lastName: this.getNodeParameter('lastName', 0),
+						context: this.getNodeParameter('context', 0),
+						source: this.getNodeParameter('source', 0),
+						fkId: this.getNodeParameter('fkId', 0),
+						fkUserId: this.getNodeParameter('fkUserId', 0),
+						phoneNumber: this.getNodeParameter('phoneNumber', 0) || undefined,
+						email: this.getNodeParameter('email', 0) || undefined,
 					},
 					json: true,
 				});
-
-				return [
-					[
-						{
-							json: responseData,
-						},
-					],
-				];
+				const conversationResponse = await this.helpers.httpRequest({
+					method: 'POST',
+					url: 'https://api.raia2.com/external/conversations',
+					headers,
+					body: { conversationUserId: userResponse.id, title: 'Chat with Agent' },
+					json: true,
+				});
+				returnItems.push({ json: conversationResponse });
+			} else if (action === 'promptAgent') {
+				const prompt = this.getNodeParameter('prompt', 0) as string;
+				const response = await this.helpers.httpRequest({
+					method: 'POST',
+					url: 'https://api.raia2.com/external/prompts',
+					headers,
+					body: { prompt },
+					json: true,
+				});
+				returnItems.push({ json: response });
+			} else if (action === 'waitForReply') {
+				// Handled in webhook
+				return [];
+			} else if (action === 'sendMessage') {
+				const response = await this.helpers.httpRequest({
+					method: 'POST',
+					url: `https://api.raia2.com/external/messages`,
+					headers,
+					body: {
+						conversationId: this.getNodeParameter('conversationId', 0),
+						message: this.getNodeParameter('message', 0),
+					},
+					json: true,
+				});
+				returnItems.push({ json: response });
 			} else {
-				throw new ApplicationError('Invalid conversation type selected');
+				throw new NodeApiError(this.getNode(), { message: 'Unknown Action' });
 			}
 		} catch (error) {
-			console.log(error);
 			throw new NodeApiError(this.getNode(), error);
 		}
+
+		return [returnItems];
 	}
 }

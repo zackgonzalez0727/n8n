@@ -38,7 +38,7 @@ export class RaiaApi implements ICredentialType {
 	test: ICredentialTestRequest = {
 		request: {
 			method: 'POST',
-			url: 'https://api.raia2.com/external/prompts',
+			url: 'https://api.raia2.com/external/agents/by-api-key',
 			body: {
 				prompt: 'Test prompt to validate API key',
 			},
